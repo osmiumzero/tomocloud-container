@@ -1,0 +1,10 @@
+*.sif
+*.h5
+*.hdf5
+*.tiff
+*.tif
+*.zarr
+*.pyc
+__pycache__/
+.env
+*.egg-info/

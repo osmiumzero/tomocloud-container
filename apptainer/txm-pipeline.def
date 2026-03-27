@@ -1,0 +1,127 @@
+Bootstrap: docker
+From: nvidia/cuda:12.2.2-devel-ubuntu22.04
+
+%labels
+    Author SSRL AMSC
+    Version 1.0
+    Description TXM tomographic reconstruction + SAM3 segmentation pipeline
+
+%help
+    TXM Pipeline container for GPU-accelerated tomographic reconstruction
+    and AI segmentation (SAM 2.1 / SAM3).
+
+    Tested on:
+      - SLAC S3DF (ada partition, L40S GPUs, driver 535.x)
+      - AWS GPU instances via IRI API
+
+    Run via Slurm + Apptainer:
+      srun --gpus=4 --time=03:00:00 \
+        apptainer exec --nv \
+          --bind /data:/data \
+          --bind /models:/models \
+          txm-pipeline.sif python /app/reconstruct_gpu.py --help
+
+%environment
+    export PYTHONPATH="/app:${PYTHONPATH:-}"
+    export OMP_NUM_THREADS=8
+    export OPENBLAS_NUM_THREADS=8
+    export HF_HOME="${HF_HOME:-/hf_cache}"
+    export LC_ALL=C
+
+    # Add pip-installed nvidia libs to LD_LIBRARY_PATH
+    NVIDIA_LIBS="/usr/local/lib/python3.11/dist-packages/nvidia"
+    if [ -d "${NVIDIA_LIBS}" ]; then
+        for subdir in cuda_nvrtc cuda_runtime cudnn cublas cufft curand cusolver cusparse; do
+            if [ -d "${NVIDIA_LIBS}/${subdir}/lib" ]; then
+                export LD_LIBRARY_PATH="${NVIDIA_LIBS}/${subdir}/lib:${LD_LIBRARY_PATH:-}"
+            fi
+        done
+    fi
+
+%post
+    # Prevent interactive prompts (tzdata, etc.)
+    export DEBIAN_FRONTEND=noninteractive
+    export TZ=UTC
+    ln -snf /usr/share/zoneinfo/UTC /etc/localtime
+    echo "UTC" > /etc/timezone
+
+    # System packages
+    apt-get update && apt-get install -y --no-install-recommends \
+        software-properties-common
+    add-apt-repository -y ppa:deadsnakes/ppa
+    apt-get update && apt-get install -y --no-install-recommends \
+        python3.11 python3.11-dev python3.11-venv python3.11-distutils \
+        gcc g++ cmake swig git pkg-config \
+        libgomp1 libgl1 libglib2.0-0 \
+        curl ca-certificates
+    rm -rf /var/lib/apt/lists/*
+
+    # Make python3.11 the default
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1
+
+    # pip bootstrap
+    curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11
+    python -m pip install --no-cache-dir --upgrade pip setuptools wheel
+
+    # Core numerical stack (numpy<2.0 is critical for tomocupy ABI)
+    pip install --no-cache-dir \
+        "numpy<2.0" \
+        "scipy>=1.13,<1.15" \
+        cupy-cuda12x \
+        h5py \
+        hdf5plugin \
+        tifffile \
+        numexpr \
+        opencv-python-headless \
+        pywavelets \
+        scikit-build
+
+    # Build tomocupy from source
+    # MUST use --no-build-isolation: pip's isolated build env produces
+    # .so files with no embedded CUDA device code
+    git clone https://github.com/tomography/tomocupy.git /tmp/tomocupy
+    cd /tmp/tomocupy
+    pip install --no-build-isolation --no-cache-dir --no-deps .
+    cd / && rm -rf /tmp/tomocupy
+
+    # Zarr / OME-Zarr
+    pip install --no-cache-dir zarr ome-zarr numcodecs
+
+    # PyTorch (cu121 wheels -- CUDA 12.1 runtime compatible with 12.2 driver)
+    pip install --no-cache-dir \
+        torch torchvision \
+        --index-url https://download.pytorch.org/whl/cu121
+
+    # SAM runtime deps
+    pip install --no-cache-dir \
+        "setuptools<70" \
+        hydra-core iopath tqdm ftfy regex timm einops \
+        pycocotools psutil huggingface-hub
+
+    # SAM 2.1 + SAM3
+    pip install --no-cache-dir --no-build-isolation --no-deps \
+        git+https://github.com/facebookresearch/sam2.git
+    pip install --no-cache-dir --no-build-isolation --no-deps \
+        git+https://github.com/facebookresearch/sam3.git
+
+    # Globus SDK (for in-job data transfers)
+    pip install --no-cache-dir "globus-sdk" "cryptography<43"
+
+    # Re-pin numpy last (transitive deps may have upgraded it)
+    pip install --no-cache-dir "numpy<2.0"
+
+    # Create app directory
+    mkdir -p /app
+
+%runscript
+    exec "$@"
+
+%test
+    python -c "import numpy; print(f'numpy {numpy.__version__}')"
+    python -c "import cupy; print(f'cupy {cupy.__version__}')"
+    python -c "import tomocupy; print('tomocupy OK')"
+    python -c "import torch; print(f'torch {torch.__version__}, CUDA {torch.cuda.is_available()}')"
+    python -c "import sam2; print('sam2 OK')"
+    python -c "import zarr; print(f'zarr {zarr.__version__}')"
+    echo "All imports OK"
