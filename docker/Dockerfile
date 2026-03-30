@@ -56,7 +56,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.11 python3.11-venv python3-pip \
     libgomp1 libgl1 libglib2.0-0 \
-    git ca-certificates \
+    git ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
 RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 \
@@ -111,8 +111,12 @@ COPY --from=builder /usr/local/lib/python3.11/dist-packages/tomocupy*.dist-info 
 # Re-pin numpy last (pip may have upgraded it via transitive deps)
 RUN pip install --no-cache-dir "numpy<2.0"
 
+# Pipeline scripts
+COPY pipeline/ /app/pipeline/
+RUN chmod +x /app/pipeline/run_full_pipeline.sh
+
 # Container entrypoint
-COPY entrypoint.sh /app/entrypoint.sh
+COPY docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 # Environment
