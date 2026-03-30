@@ -120,7 +120,7 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
 
     cmd = [
-        "tomocupy", "recon",
+        sys.executable, "-m", "tomocupy", "recon",
         "--file-name", h5_path,
         "--out-path-name", args.output_dir,
         "--reconstruction-type", "full",
