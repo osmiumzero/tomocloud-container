@@ -94,6 +94,7 @@ while [[ $# -gt 0 ]]; do
         --sam3-stability-score-thresh) SAM3_STABILITY_SCORE_THRESH="$2"; shift 2 ;;
         --sam3-min-mask-area) SAM3_MIN_MASK_AREA="$2"; shift 2 ;;
         --sam3-preview-slices) SAM3_PREVIEW_SLICES="$2"; shift 2 ;;
+        --no-tar)             shift ;;  # accepted but no-op on AWS (no tar step)
         *) echo "WARNING: Unknown argument $1"; shift ;;
     esac
 done

@@ -48,7 +48,9 @@ RUN git clone https://github.com/tomography/tomocupy.git /tmp/tomocupy \
 
 
 # -- Stage 2: Runtime --
-FROM nvidia/cuda:12.2.2-runtime-ubuntu22.04
+# Using devel (not runtime) because CuPy JIT-compiles CUDA kernels at runtime
+# and needs headers like cuda_fp16.h from the CUDA toolkit
+FROM nvidia/cuda:12.2.2-devel-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
