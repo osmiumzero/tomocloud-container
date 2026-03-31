@@ -234,7 +234,7 @@ class SAM3Backend:
         model = build_sam3_image_model(
             device=builder_device, eval_mode=True,
         )
-        model = model.to(device).float()
+        model = model.to(device).half()
 
         self.processor = Sam3Processor(
             model,
