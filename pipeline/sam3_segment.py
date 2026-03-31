@@ -234,7 +234,7 @@ class SAM3Backend:
         model = build_sam3_image_model(
             device=builder_device, eval_mode=True,
         )
-        model = model.to(device).half()
+        model = model.to(device)
 
         self.processor = Sam3Processor(
             model,
@@ -260,8 +260,9 @@ class SAM3Backend:
         rgb_array = normalize_slice_to_rgb(slice_2d)
         pil_image = Image.fromarray(rgb_array, mode="RGB")
 
-        state = self.processor.set_image(pil_image)
-        state = self.processor.set_text_prompt(prompt=prompt, state=state)
+        with torch.autocast("cuda", dtype=torch.float16):
+            state = self.processor.set_image(pil_image)
+            state = self.processor.set_text_prompt(prompt=prompt, state=state)
 
         masks_tensor = state.get("masks")
         scores_tensor = state.get("scores")
