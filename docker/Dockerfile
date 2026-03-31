@@ -103,6 +103,13 @@ RUN pip install --no-cache-dir --no-build-isolation --no-deps \
 RUN pip install --no-cache-dir --no-build-isolation --no-deps \
     git+https://github.com/facebookresearch/sam3.git
 
+# Patch SAM3 io_utils.py: replace float16 with float32 to avoid
+# bfloat16/float16 dtype mismatch on A100 (CUDA 13.0 / driver 580).
+# SAM3 hardcodes float16 for image preprocessing but model weights load
+# as bfloat16 on A100, causing RuntimeError in linear layers.
+RUN find /usr/local/lib/python3.11/dist-packages/sam3 -name "io_utils.py" \
+    -exec sed -i 's/torch\.float16/torch.float32/g; s/\.half()/.float()/g' {} \;
+
 # Globus SDK (for in-job data transfers)
 RUN pip install --no-cache-dir "globus-sdk" "cryptography<43"
 
