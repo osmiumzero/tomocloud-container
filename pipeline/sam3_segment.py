@@ -234,7 +234,7 @@ class SAM3Backend:
         model = build_sam3_image_model(
             device=builder_device, eval_mode=True,
         )
-        model = model.to(device).half()
+        model = model.to(device)
 
         self.processor = Sam3Processor(
             model,
@@ -260,8 +260,9 @@ class SAM3Backend:
         rgb_array = normalize_slice_to_rgb(slice_2d)
         pil_image = Image.fromarray(rgb_array, mode="RGB")
 
-        state = self.processor.set_image(pil_image)
-        state = self.processor.set_text_prompt(prompt=prompt, state=state)
+        with torch.inference_mode(), torch.autocast("cuda", dtype=torch.float16):
+            state = self.processor.set_image(pil_image)
+            state = self.processor.set_text_prompt(prompt=prompt, state=state)
 
         masks_tensor = state.get("masks")
         scores_tensor = state.get("scores")
@@ -307,12 +308,14 @@ class SAM3Backend:
         pil_image = Image.fromarray(rgb_array, mode="RGB")
 
         # Set image once (expensive), reuse for each prompt
-        image_state = self.processor.set_image(pil_image)
+        with torch.inference_mode(), torch.autocast("cuda", dtype=torch.float16):
+            image_state = self.processor.set_image(pil_image)
 
         results = {}
         for prompt in text_prompts:
-            state = self.processor.set_text_prompt(
-                prompt=prompt, state=dict(image_state))
+            with torch.inference_mode(), torch.autocast("cuda", dtype=torch.float16):
+                state = self.processor.set_text_prompt(
+                    prompt=prompt, state=dict(image_state))
 
             masks_tensor = state.get("masks")
             scores_tensor = state.get("scores")
