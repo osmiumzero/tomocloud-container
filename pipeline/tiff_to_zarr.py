@@ -104,7 +104,9 @@ def load_tiff_stack(tiff_dir: str, io_workers: int = 8) -> np.ndarray:
 
     files = sorted(glob.glob(os.path.join(tiff_dir, "slice_*.tif")))
     if not files:
-        raise FileNotFoundError(f"No slice_*.tif files found in {tiff_dir}")
+        files = sorted(glob.glob(os.path.join(tiff_dir, "recon_*.tiff")))
+    if not files:
+        raise FileNotFoundError(f"No slice_*.tif or recon_*.tiff files found in {tiff_dir}")
 
     # Dimensions from first slice
     first = tifffile.imread(files[0])
